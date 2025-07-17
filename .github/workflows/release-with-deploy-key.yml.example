@@ -1,0 +1,22 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  # ... (test and release jobs remain the same) ...
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout homebrew-tap
+      uses: actions/checkout@v3
+      with:
+        repository: agentstation/homebrew-tap
+        ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+        path: homebrew-tap
+    
+    # ... (rest of the workflow remains the same) ...
