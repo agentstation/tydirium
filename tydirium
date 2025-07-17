@@ -4,7 +4,7 @@
 # "It's an older email, sir, but it checks out."
 # 
 # Repository: https://github.com/agentstation/tydirium
-# Version: 1.4.0
+# Version: 1.4.1
 # License: MIT
 
 # Colors for output
@@ -40,7 +40,7 @@ if ! command_exists dig; then
 fi
 
 # Version string
-VERSION="1.4.0"
+VERSION="1.4.1"
 
 # Parse command line options
 QUICK_MODE=false
@@ -427,8 +427,8 @@ else
             dns_target="$dns_server"
             display_target="$dns_server"
             if [[ -n "$dns_domain" ]]; then
-                # Try to use domain name
-                if resolved_ip=$(dig +short "$dns_domain" 2>/dev/null | head -1 | grep -E '^[0-9]'); then
+                # Try to use domain name if it resolves
+                if dig +short "$dns_domain" 2>/dev/null | head -1 | grep -qE '^[0-9]'; then
                     dns_target="$dns_domain"
                     display_target="$dns_domain"
                 fi

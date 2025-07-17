@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2025-07-17
+### Fixed
+- Shellcheck warnings in bash completion script (SC2207)
+- Unused variable warning in DNS resolution check (SC2034)
+
 ## [1.4.0] - 2025-07-17
 ### Added
 - Version flag support (`-V` or `--version`)
@@ -98,7 +103,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 "It's an older email, sir, but it checks out."
 
-[Unreleased]: https://github.com/agentstation/tydirium/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/agentstation/tydirium/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/agentstation/tydirium/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/agentstation/tydirium/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/agentstation/tydirium/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/agentstation/tydirium/compare/v1.2.1...v1.2.2
