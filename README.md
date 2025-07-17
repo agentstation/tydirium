@@ -33,6 +33,9 @@ tydirium -q example.com
 
 # Verbose mode (detailed analysis)
 tydirium -v example.com
+
+# Show version
+tydirium -V
 ```
 
 ## 🛠️ Installation
@@ -44,6 +47,13 @@ brew install agentstation/tap/tydirium
 ```
 
 That's it! Homebrew will handle installation and updates automatically.
+
+**What's included:**
+- 🚀 Main tydirium command
+- 📘 Man page (`man tydirium`)
+- 🔧 Shell completions for bash, zsh, and fish
+- 📚 Documentation and examples
+- 🔄 Automatic updates via `brew upgrade`
 
 ### Via curl
 
@@ -72,6 +82,10 @@ chmod +x tydirium
 
 - `dig` command (part of `dnsutils` or `bind-utils` package)
 - Bash 3.2+ (macOS/Linux)
+
+## 📋 What's New
+
+See [CHANGELOG.md](CHANGELOG.md) for the latest features and updates.
 
 ## 🔍 What It Checks
 
@@ -116,6 +130,14 @@ Generated: Thu Jul 17 11:30:00 CDT 2025
 ⚠️  DMARC: Present but weak (p=none)
 ✅ MX: Mail servers configured
 
+DNS Propagation Status:
+✅ Cloudflare (one.one.one.one)
+✅ Google (dns.google)
+✅ OpenDNS (resolver1.opendns.com)
+⚠️  Quad9 (dns.quad9.net) - Not propagated yet
+❌ DNS.WATCH (resolver2.dns.watch) - Server unreachable
+Propagation: 60% (3/5 servers)
+
 === Recommended Testing Steps ===
 
 Your email authentication looks good! Here's how to verify:
@@ -155,6 +177,32 @@ tydirium -v example.com
 ```bash
 tydirium -h
 ```
+
+### Check Version
+```bash
+tydirium -V
+```
+
+### Read the Manual
+```bash
+man tydirium
+```
+
+## 🔧 Shell Completions
+
+Tab completion is available for all supported shells:
+
+### Bash
+```bash
+# Add to ~/.bashrc or ~/.bash_profile
+source $(brew --prefix)/etc/bash_completion
+```
+
+### Zsh
+Automatically loaded if you're using Homebrew's completions directory.
+
+### Fish
+Automatically loaded from vendor completions.
 
 ## 🌟 Why "tydirium"?
 
