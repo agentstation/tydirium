@@ -1,0 +1,37 @@
+#compdef tydirium
+# Zsh completion for tydirium
+
+_tydirium() {
+    local -a opts
+    local -a domains
+    
+    opts=(
+        '-q[Quick mode - check fewer DNS servers]'
+        '-v[Verbose mode - show more details]'
+        '-h[Show help]'
+        '-V[Show version]'
+    )
+    
+    domains=(
+        'example.com'
+        'gmail.com'
+        'yahoo.com'
+        'outlook.com'
+    )
+    
+    _arguments -C \
+        '1: :->command' \
+        '*: :->args'
+    
+    case $state in
+        command)
+            _arguments $opts
+            _values 'domains' $domains
+            ;;
+        args)
+            _values 'domains' $domains
+            ;;
+    esac
+}
+
+_tydirium "$@"

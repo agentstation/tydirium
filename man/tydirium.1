@@ -1,0 +1,115 @@
+.TH TYDIRIUM 1 "July 2025" "tydirium 1.4.0" "User Commands"
+.SH NAME
+tydirium \- Email authentication checker
+.SH SYNOPSIS
+.B tydirium
+[\fI\-qvhV\fR]
+[\fIdomain\fR|\fIemail@domain\fR]
+.SH DESCRIPTION
+.B tydirium
+is a comprehensive email authentication checker that validates SPF, DKIM, and DMARC records to ensure your emails pass through modern email systems.
+.PP
+"It's an older email, sir, but it checks out."
+.SH OPTIONS
+.TP
+.BR \-q
+Quick mode. Checks only 3 DNS servers instead of the full list.
+.TP
+.BR \-v
+Verbose mode. Shows detailed output including raw DNS records and additional checks.
+.TP
+.BR \-h
+Display help message and exit.
+.TP
+.BR \-V
+Display version information and exit.
+.SH EXAMPLES
+.PP
+Check email authentication for a domain:
+.PP
+.nf
+.RS
+tydirium example.com
+.RE
+.fi
+.PP
+Check email authentication for an email address:
+.PP
+.nf
+.RS
+tydirium user@example.com
+.RE
+.fi
+.PP
+Quick check using only 3 DNS servers:
+.PP
+.nf
+.RS
+tydirium -q example.com
+.RE
+.fi
+.PP
+Verbose output with detailed information:
+.PP
+.nf
+.RS
+tydirium -v example.com
+.RE
+.fi
+.SH CHECKS PERFORMED
+.PP
+.B SPF (Sender Policy Framework)
+.RS
+Validates SPF record syntax, policy strictness, include chains, and redirect handling.
+.RE
+.PP
+.B DKIM (DomainKeys Identified Mail)
+.RS
+Auto-discovers DKIM selectors, checks key strength, tracks DNS propagation across multiple providers.
+.RE
+.PP
+.B DMARC (Domain-based Message Authentication)
+.RS
+Checks policy enforcement level, reporting configuration, subdomain policy, and deployment percentage.
+.RE
+.PP
+.B Additional Checks
+.RS
+MX record verification, blacklist status, BIMI record detection, MTA-STS and TLS reporting (verbose mode).
+.RE
+.SH DNS SERVERS
+.PP
+tydirium checks propagation across multiple DNS providers including:
+Cloudflare (1.1.1.1), Google (8.8.8.8), OpenDNS, Quad9, and others.
+In quick mode (-q), only the first three are checked.
+.SH EXIT STATUS
+.TP
+.B 0
+Successful execution
+.TP
+.B 1
+Error in execution (missing dependencies, invalid options, etc.)
+.SH DEPENDENCIES
+.PP
+Requires the
+.BR dig (1)
+command for DNS lookups. On most systems, this is provided by the bind-utils or dnsutils package.
+.SH FILES
+.TP
+.I /usr/local/bin/tydirium
+The tydirium executable
+.TP
+.I /usr/local/share/doc/tydirium/
+Documentation directory
+.SH BUGS
+.PP
+Report bugs at: https://github.com/agentstation/tydirium/issues
+.SH AUTHOR
+.PP
+AgentStation (https://agentstation.ai)
+.SH SEE ALSO
+.BR dig (1),
+.BR host (1),
+.BR nslookup (1)
+.PP
+Full documentation at: https://github.com/agentstation/tydirium

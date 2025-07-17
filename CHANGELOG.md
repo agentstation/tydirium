@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2025-07-17
+### Added
+- Version flag support (`-V` or `--version`)
+- Shell completion scripts for bash, zsh, and fish
+- Man page for Unix systems
+- Example scripts and documentation
+- Post-install checks for dig availability in Homebrew formula
+- Enhanced test coverage in Homebrew formula
+
+### Changed
+- Homebrew formula now uses `uses_from_macos "bind"` instead of optional dependency
+- Improved caveats with color formatting and troubleshooting tips
+- Formula shows upgrade-specific messages when updating
+
+### Fixed
+- Homebrew formula now properly installs all documentation and completions
+
 ## [1.3.0] - 2025-07-17
 ### Added
 - DNS server connectivity check before propagation check
@@ -81,7 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 "It's an older email, sir, but it checks out."
 
-[Unreleased]: https://github.com/agentstation/tydirium/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/agentstation/tydirium/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/agentstation/tydirium/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/agentstation/tydirium/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/agentstation/tydirium/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/agentstation/tydirium/compare/v1.2.0...v1.2.1
