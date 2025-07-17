@@ -158,6 +158,21 @@ else
     elif echo "$MX_RECORDS" | grep -q "sendgrid.net"; then
         echo -e "${GREEN}✅ Using SendGrid${NC}"
         LIKELY_PROVIDER="sendgrid"
+    elif echo "$MX_RECORDS" | grep -q "protonmail.ch"; then
+        echo -e "${GREEN}✅ Using Proton Mail${NC}"
+        LIKELY_PROVIDER="proton"
+    elif echo "$MX_RECORDS" | grep -q "mailgun.org"; then
+        echo -e "${GREEN}✅ Using Mailgun${NC}"
+        LIKELY_PROVIDER="mailgun"
+    elif echo "$MX_RECORDS" | grep -q "mail.protection.outlook.com"; then
+        echo -e "${GREEN}✅ Using Exchange Online Protection${NC}"
+        LIKELY_PROVIDER="microsoft"
+    elif echo "$MX_RECORDS" | grep -q "pphosted.com"; then
+        echo -e "${GREEN}✅ Using Proofpoint${NC}"
+        LIKELY_PROVIDER="proofpoint"
+    elif echo "$MX_RECORDS" | grep -q "mimecast.com"; then
+        echo -e "${GREEN}✅ Using Mimecast${NC}"
+        LIKELY_PROVIDER="mimecast"
     else
         echo -e "${CYAN}✓ Custom or other email provider${NC}"
         LIKELY_PROVIDER="other"
@@ -297,6 +312,10 @@ COMMON_SELECTORS=(
     "amazonses" "aws"
     "cm" "createsend" # Campaign Monitor
     "mta" "relay"
+    "protonmail" "protonmail2" "protonmail3" # Proton Mail
+    "dkim" "dkim1" "dkim2" # Generic
+    "mailgun" "mg" "mailo"  # Mailgun
+    "pm" "em" # Various providers
 )
 
 # Function to check DKIM on different servers
@@ -638,6 +657,16 @@ if [ ! -z "$LIKELY_PROVIDER" ] && [ "$LIKELY_PROVIDER" != "other" ]; then
             echo "• Check settings: ${CYAN}mailadmin.zoho.com${NC} > Email Authentication"
             echo "• Enable two-factor authentication"
             echo "• Use Email Tracer for delivery debugging"
+            ;;
+        "proton")
+            echo "• Check settings: ${CYAN}account.proton.me${NC} > Settings > Domain names"
+            echo "• Proton Mail handles DKIM automatically for custom domains"
+            echo "• Consider enabling catch-all addresses for better email management"
+            ;;
+        "mailgun")
+            echo "• Check domain settings: ${CYAN}app.mailgun.com${NC} > Sending > Domains"
+            echo "• Verify domain is active and verified"
+            echo "• Monitor your sending reputation in the dashboard"
             ;;
     esac
 fi
