@@ -37,34 +37,30 @@ tydirium -v example.com
 
 ## 🛠️ Installation
 
-### Via curl (Recommended)
-
-```bash
-curl -sSL https://raw.githubusercontent.com/agentstation/tydirium/master/install.sh | bash
-```
-
-### Via Homebrew
-
-```bash
-brew tap agentstation/tap
-brew install tydirium
-```
-
-Or in one command:
+### Via Homebrew (Recommended)
 
 ```bash
 brew install agentstation/tap/tydirium
 ```
 
+That's it! Homebrew will handle installation and updates automatically.
+
+### Via curl
+
+```bash
+curl -sSL https://raw.githubusercontent.com/agentstation/tydirium/master/install.sh | bash
+```
+
 ### Manual Installation
 
 ```bash
+# Clone and install
 git clone https://github.com/agentstation/tydirium.git
 cd tydirium
 ./install.sh
 ```
 
-Or simply download and run:
+Or download directly:
 
 ```bash
 curl -O https://raw.githubusercontent.com/agentstation/tydirium/master/tydirium
