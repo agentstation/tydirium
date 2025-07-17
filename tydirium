@@ -184,7 +184,7 @@ else
     else
         # Check SPF syntax
         if echo "$SPF_RECORDS" | grep -q "redirect="; then
-            REDIRECT_DOMAIN=$(echo "$SPF_RECORDS" | grep -o "redirect=[^ ]*" | cut -d= -f2)
+            REDIRECT_DOMAIN=$(echo "$SPF_RECORDS" | sed -n 's/.*redirect=\([^ ]*\).*/\1/p')
             echo -e "${CYAN}ℹ️  SPF redirects to: $REDIRECT_DOMAIN${NC}"
             
             # Check redirect target
@@ -214,7 +214,7 @@ else
         # Check for common includes
         if [ "$VERBOSE" = true ]; then
             echo "   SPF includes:"
-            echo "$SPF_RECORDS" | grep -o "include:[^ ]*" | sed 's/include:/   - /'
+            echo "$SPF_RECORDS" | sed -n 's/.*\(include:[^ ]*\).*/   - \1/p' | sed 's/include://'
         fi
         
         # Check SPF record length
@@ -249,7 +249,7 @@ else
     
     # Check subdomain policy
     if echo "$DMARC_RECORD" | grep -q "sp="; then
-        SP_POLICY=$(echo "$DMARC_RECORD" | grep -o "sp=[^;]*" | cut -d= -f2)
+        SP_POLICY=$(echo "$DMARC_RECORD" | sed -n 's/.*sp=\([^;]*\).*/\1/p')
         echo "   Subdomain policy: $SP_POLICY"
     fi
     
@@ -266,7 +266,7 @@ else
     
     # Check percentage
     if echo "$DMARC_RECORD" | grep -q "pct="; then
-        PCT=$(echo "$DMARC_RECORD" | grep -o "pct=[0-9]*" | cut -d= -f2)
+        PCT=$(echo "$DMARC_RECORD" | sed -n 's/.*pct=\([0-9]*\).*/\1/p')
         if [ "$PCT" -lt 100 ]; then
             echo -e "   ${YELLOW}⚠️  DMARC only applies to $PCT% of messages${NC}"
         fi
@@ -339,7 +339,7 @@ else
         
         # Check key length
         if [[ "$DKIM_RECORD" == *"p="* ]]; then
-            KEY_PART=$(echo "$DKIM_RECORD" | grep -o "p=[^;\"]*" | cut -d= -f2 | tr -d ' ')
+            KEY_PART=$(echo "$DKIM_RECORD" | sed -n 's/.*p=\([^;\"]*\).*/\1/p' | tr -d ' ')
             # Approximate key length (base64 to bits)
             KEY_LENGTH=$((${#KEY_PART} * 6))
             
