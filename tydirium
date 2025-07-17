@@ -300,7 +300,8 @@ COMMON_SELECTORS=(
 check_dkim() {
     local selector=$1
     local dns_server=$2
-    local result=$(dig @$dns_server "${selector}._domainkey.$DOMAIN" TXT +short 2>/dev/null | tr -d '\n' | sed 's/" "//g')
+    local result
+    result=$(dig @$dns_server "${selector}._domainkey.$DOMAIN" TXT +short 2>/dev/null | tr -d '\n' | sed 's/" "//g')
     
     if [ ! -z "$result" ] && [[ "$result" == *"v=DKIM"* ]]; then
         return 0
