@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2025-07-17
+### Added
+- DNS server connectivity check before propagation check
+- Clear distinction between unreachable servers (❌), not propagated (⚠️), and found (✅)
+- Support for DNS provider domain names instead of hardcoded IPs
+
+### Changed
+- DNS servers now use domain names where available (Cloudflare, Google, Quad9, etc.)
+- Improved error messages to distinguish between server issues and propagation delays
+- More reliable DNS checks using domain names that survive IP changes
+
+### Fixed
+- False negatives when DNS servers are down vs records not propagated
+
 ## [1.2.2] - 2025-07-17
 ### Fixed
 - Updated Alternate DNS server from deprecated 76.76.19.19 to working 76.76.2.11
@@ -67,7 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 "It's an older email, sir, but it checks out."
 
-[Unreleased]: https://github.com/agentstation/tydirium/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/agentstation/tydirium/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/agentstation/tydirium/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/agentstation/tydirium/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/agentstation/tydirium/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/agentstation/tydirium/compare/v1.1.0...v1.2.0
