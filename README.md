@@ -2,6 +2,8 @@
 
 > "It's an older email, sir, but it checks out."
 
+![It's an older email, sir, but it checks out](assets/older-email-meme.gif)
+
 A comprehensive email authentication checker that validates SPF, DKIM, and DMARC records to ensure your emails pass through the shields of modern email systems.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
