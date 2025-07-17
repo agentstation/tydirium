@@ -1,0 +1,644 @@
+#!/bin/bash
+
+# tydirium - Email Authentication Checker
+# "It's an older email, sir, but it checks out."
+# 
+# Repository: https://github.com/agentstation/tydirium
+# Version: 1.0.0
+# License: MIT
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+NC='\033[0m' # No Color
+
+# Function to extract domain from email
+extract_domain() {
+    local input=$1
+    if [[ "$input" == *"@"* ]]; then
+        # It's an email address
+        echo "${input#*@}"
+    else
+        # It's already a domain
+        echo "$input"
+    fi
+}
+
+# Function to check if command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Check for required tools
+if ! command_exists dig; then
+    echo -e "${RED}Error: 'dig' command not found. Please install dnsutils/bind-utils.${NC}"
+    exit 1
+fi
+
+# Parse command line options
+QUICK_MODE=false
+VERBOSE=false
+while getopts "qvh" opt; do
+    case ${opt} in
+        q )
+            QUICK_MODE=true
+            ;;
+        v )
+            VERBOSE=true
+            ;;
+        h )
+            echo "Usage: $0 [-q] [-v] [domain/email]"
+            echo "  -q  Quick mode (check fewer DNS servers)"
+            echo "  -v  Verbose mode (show more details)"
+            echo "  -h  Show this help"
+            exit 0
+            ;;
+        \? )
+            echo "Invalid option: -$OPTARG" 1>&2
+            exit 1
+            ;;
+    esac
+done
+shift $((OPTIND -1))
+
+# Get domain from parameter or ask interactively
+if [ $# -eq 0 ]; then
+    echo -e "${CYAN}Email Authentication Checker${NC}"
+    echo "Enter a domain (example.com) or email address (user@example.com):"
+    read -p "> " INPUT
+    if [ -z "$INPUT" ]; then
+        echo -e "${RED}Error: No input provided${NC}"
+        exit 1
+    fi
+    DOMAIN=$(extract_domain "$INPUT")
+else
+    DOMAIN=$(extract_domain "$1")
+fi
+
+# Track issues for recommendations
+ISSUES_SPF=0
+ISSUES_DKIM=0
+ISSUES_DMARC=0
+ISSUES_MX=0
+
+echo
+echo -e "${CYAN}=== Email Authentication Check for ${DOMAIN} ===${NC}"
+echo "Generated: $(date)"
+if [ "$QUICK_MODE" = true ]; then
+    echo -e "${YELLOW}Running in quick mode (use -v for comprehensive check)${NC}"
+fi
+echo
+
+# Check if domain exists
+echo -e "${BLUE}0. Domain Verification:${NC}"
+echo "---------------------"
+if ! host "$DOMAIN" >/dev/null 2>&1; then
+    echo -e "${RED}❌ Domain does not exist or cannot be resolved${NC}"
+    exit 1
+else
+    echo -e "${GREEN}✅ Domain exists${NC}"
+    
+    # Get nameservers
+    NS_RECORDS=$(dig "$DOMAIN" NS +short | head -3)
+    if [ ! -z "$NS_RECORDS" ] && [ "$VERBOSE" = true ]; then
+        echo "   Nameservers:"
+        echo "$NS_RECORDS" | sed 's/^/   - /'
+    fi
+fi
+echo
+
+# Check MX Records
+echo -e "${BLUE}1. MX Records:${NC}"
+echo "-------------"
+MX_RECORDS=$(dig "$DOMAIN" MX +short | sort -n)
+if [ -z "$MX_RECORDS" ]; then
+    echo -e "${RED}❌ No MX records found${NC}"
+    echo "   This domain cannot receive email"
+    ISSUES_MX=1
+else
+    echo "$MX_RECORDS"
+    
+    # Count MX records
+    MX_COUNT=$(echo "$MX_RECORDS" | wc -l)
+    if [ "$MX_COUNT" -eq 1 ]; then
+        echo -e "${YELLOW}⚠️  Only one MX record (no redundancy)${NC}"
+    fi
+    
+    # Check MX reachability
+    if [ "$VERBOSE" = true ]; then
+        echo "   Checking MX server connectivity..."
+        FIRST_MX=$(echo "$MX_RECORDS" | head -1 | awk '{print $2}' | sed 's/\.$//')
+        if nc -z -w2 "$FIRST_MX" 25 2>/dev/null; then
+            echo -e "   ${GREEN}✅ Port 25 reachable on $FIRST_MX${NC}"
+        else
+            echo -e "   ${YELLOW}⚠️  Cannot verify port 25 on $FIRST_MX${NC}"
+        fi
+    fi
+    
+    # Identify email provider
+    if echo "$MX_RECORDS" | grep -q "google.com"; then
+        echo -e "${GREEN}✅ Using Google Workspace/Gmail${NC}"
+        LIKELY_PROVIDER="google"
+    elif echo "$MX_RECORDS" | grep -q "outlook.com\|microsoft"; then
+        echo -e "${GREEN}✅ Using Microsoft 365/Outlook${NC}"
+        LIKELY_PROVIDER="microsoft"
+    elif echo "$MX_RECORDS" | grep -q "mxrecord.mx\|zoho"; then
+        echo -e "${GREEN}✅ Using Zoho Mail${NC}"
+        LIKELY_PROVIDER="zoho"
+    elif echo "$MX_RECORDS" | grep -q "messagingengine.com"; then
+        echo -e "${GREEN}✅ Using FastMail${NC}"
+        LIKELY_PROVIDER="fastmail"
+    elif echo "$MX_RECORDS" | grep -q "amazonses.com"; then
+        echo -e "${GREEN}✅ Using Amazon SES${NC}"
+        LIKELY_PROVIDER="ses"
+    elif echo "$MX_RECORDS" | grep -q "sendgrid.net"; then
+        echo -e "${GREEN}✅ Using SendGrid${NC}"
+        LIKELY_PROVIDER="sendgrid"
+    else
+        echo -e "${CYAN}✓ Custom or other email provider${NC}"
+        LIKELY_PROVIDER="other"
+    fi
+fi
+echo
+
+# Check SPF Record
+echo -e "${BLUE}2. SPF Record:${NC}"
+echo "-------------"
+SPF_RECORDS=$(dig "$DOMAIN" TXT +short | grep "v=spf1")
+if [ -z "$SPF_RECORDS" ]; then
+    echo -e "${RED}❌ No SPF record found${NC}"
+    echo "   Recommendation: Add an SPF record to prevent spoofing"
+    ISSUES_SPF=1
+else
+    echo "$SPF_RECORDS"
+    
+    # Check for common issues
+    SPF_COUNT=$(echo "$SPF_RECORDS" | wc -l)
+    if [ "$SPF_COUNT" -gt 1 ]; then
+        echo -e "${RED}❌ Multiple SPF records found (only one allowed)${NC}"
+        ISSUES_SPF=1
+    else
+        # Check SPF syntax
+        if echo "$SPF_RECORDS" | grep -q "redirect="; then
+            REDIRECT_DOMAIN=$(echo "$SPF_RECORDS" | grep -o "redirect=[^ ]*" | cut -d= -f2)
+            echo -e "${CYAN}ℹ️  SPF redirects to: $REDIRECT_DOMAIN${NC}"
+            
+            # Check redirect target
+            REDIRECT_SPF=$(dig "$REDIRECT_DOMAIN" TXT +short | grep "v=spf1")
+            if [ ! -z "$REDIRECT_SPF" ]; then
+                echo "   Redirect target SPF: $(echo "$REDIRECT_SPF" | head -1)"
+            fi
+        fi
+        
+        # Check mechanisms
+        if echo "$SPF_RECORDS" | grep -q "~all\|?all\|-all\|+all"; then
+            if echo "$SPF_RECORDS" | grep -q "+all"; then
+                echo -e "${RED}❌ SPF uses +all (allows anyone to send)${NC}"
+                ISSUES_SPF=1
+            elif echo "$SPF_RECORDS" | grep -q "-all"; then
+                echo -e "${GREEN}✅ SPF uses -all (strict policy)${NC}"
+            elif echo "$SPF_RECORDS" | grep -q "~all"; then
+                echo -e "${YELLOW}⚠️  SPF uses ~all (soft fail)${NC}"
+            else
+                echo -e "${YELLOW}⚠️  SPF uses ?all (neutral)${NC}"
+            fi
+        elif ! echo "$SPF_RECORDS" | grep -q "redirect="; then
+            echo -e "${RED}❌ SPF record missing 'all' mechanism${NC}"
+            ISSUES_SPF=1
+        fi
+        
+        # Check for common includes
+        if [ "$VERBOSE" = true ]; then
+            echo "   SPF includes:"
+            echo "$SPF_RECORDS" | grep -o "include:[^ ]*" | sed 's/include:/   - /'
+        fi
+        
+        # Check SPF record length
+        SPF_LENGTH=${#SPF_RECORDS}
+        if [ "$SPF_LENGTH" -gt 255 ]; then
+            echo -e "${YELLOW}⚠️  SPF record exceeds 255 characters (may cause issues)${NC}"
+        fi
+    fi
+fi
+echo
+
+# Check DMARC Record
+echo -e "${BLUE}3. DMARC Record:${NC}"
+echo "---------------"
+DMARC_RECORD=$(dig "_dmarc.$DOMAIN" TXT +short)
+if [ -z "$DMARC_RECORD" ]; then
+    echo -e "${RED}❌ No DMARC record found${NC}"
+    echo "   Recommendation: Add a DMARC record for better security"
+    ISSUES_DMARC=1
+else
+    echo "$DMARC_RECORD"
+    
+    # Parse DMARC policy
+    if echo "$DMARC_RECORD" | grep -q "p=none"; then
+        echo -e "${YELLOW}⚠️  DMARC policy is 'none' (monitoring only)${NC}"
+        ISSUES_DMARC=1
+    elif echo "$DMARC_RECORD" | grep -q "p=quarantine"; then
+        echo -e "${GREEN}✅ DMARC policy is 'quarantine'${NC}"
+    elif echo "$DMARC_RECORD" | grep -q "p=reject"; then
+        echo -e "${GREEN}✅ DMARC policy is 'reject' (strictest)${NC}"
+    fi
+    
+    # Check subdomain policy
+    if echo "$DMARC_RECORD" | grep -q "sp="; then
+        SP_POLICY=$(echo "$DMARC_RECORD" | grep -o "sp=[^;]*" | cut -d= -f2)
+        echo "   Subdomain policy: $SP_POLICY"
+    fi
+    
+    # Check for reporting
+    if echo "$DMARC_RECORD" | grep -q "rua="; then
+        echo -e "   ${GREEN}✓ Aggregate reports configured${NC}"
+    else
+        echo -e "   ${YELLOW}⚠️  No aggregate reporting configured${NC}"
+    fi
+    
+    if echo "$DMARC_RECORD" | grep -q "ruf="; then
+        echo -e "   ${GREEN}✓ Forensic reports configured${NC}"
+    fi
+    
+    # Check percentage
+    if echo "$DMARC_RECORD" | grep -q "pct="; then
+        PCT=$(echo "$DMARC_RECORD" | grep -o "pct=[0-9]*" | cut -d= -f2)
+        if [ "$PCT" -lt 100 ]; then
+            echo -e "   ${YELLOW}⚠️  DMARC only applies to $PCT% of messages${NC}"
+        fi
+    fi
+fi
+echo
+
+# Check DKIM Records
+echo -e "${BLUE}4. DKIM Records:${NC}"
+echo "---------------"
+
+# Common DKIM selectors to check
+COMMON_SELECTORS=(
+    "google" "k1" "k2" "k3"
+    "default" "mail" "dkim" 
+    "s1" "s2" "selector1" "selector2"
+    "smtp" "m1" "m2"
+    "mandrill" "mailgun" "sendgrid" "sparkpost"
+    "fm1" "fm2" "fm3"  # FastMail
+    "sig1" "sig2"      # Various
+    "zendesk1" "zendesk2"
+    "dk1" "dk2"
+    "key1" "key2"
+    "mx" "mail"
+    "amazonses" "aws"
+    "cm" "createsend" # Campaign Monitor
+    "mta" "relay"
+)
+
+# Function to check DKIM on different servers
+check_dkim() {
+    local selector=$1
+    local dns_server=$2
+    local result=$(dig @$dns_server "${selector}._domainkey.$DOMAIN" TXT +short 2>/dev/null | tr -d '\n' | sed 's/" "//g')
+    
+    if [ ! -z "$result" ] && [[ "$result" == *"v=DKIM"* ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Find active DKIM selectors
+FOUND_SELECTORS=()
+echo "Checking common DKIM selectors..."
+for selector in "${COMMON_SELECTORS[@]}"; do
+    if check_dkim "$selector" "1.1.1.1"; then
+        FOUND_SELECTORS+=("$selector")
+    fi
+done
+
+if [ ${#FOUND_SELECTORS[@]} -eq 0 ]; then
+    echo -e "${RED}❌ No DKIM records found${NC}"
+    echo "   Common selectors checked: ${COMMON_SELECTORS[*]}"
+    echo
+    echo "   To find your DKIM selector:"
+    echo "   1. Check your email provider's documentation"
+    echo "   2. Look in your email provider's admin panel"
+    echo "   3. Send an email and check the headers for 'DKIM-Signature: ... s=SELECTOR'"
+    ISSUES_DKIM=1
+else
+    echo -e "${GREEN}✅ Found ${#FOUND_SELECTORS[@]} DKIM record(s)${NC}"
+    echo
+    
+    for selector in "${FOUND_SELECTORS[@]}"; do
+        echo -e "${CYAN}DKIM Selector: $selector${NC}"
+        
+        # Get DKIM record details
+        DKIM_RECORD=$(dig @1.1.1.1 "${selector}._domainkey.$DOMAIN" TXT +short 2>/dev/null)
+        
+        # Check key length
+        if [[ "$DKIM_RECORD" == *"p="* ]]; then
+            KEY_PART=$(echo "$DKIM_RECORD" | grep -o "p=[^;\"]*" | cut -d= -f2 | tr -d ' ')
+            # Approximate key length (base64 to bits)
+            KEY_LENGTH=$((${#KEY_PART} * 6))
+            
+            if [ "$KEY_LENGTH" -lt 1024 ]; then
+                echo -e "  ${YELLOW}⚠️  Key length appears to be less than 1024 bits${NC}"
+            elif [ "$KEY_LENGTH" -ge 2048 ]; then
+                echo -e "  ${GREEN}✅ Key length: ~2048 bits or higher (strong)${NC}"
+            else
+                echo -e "  ${CYAN}✓ Key length: ~1024 bits (acceptable)${NC}"
+            fi
+        fi
+        
+        echo "  DNS Propagation Status:"
+        
+        # Check multiple DNS servers
+        if [ "$QUICK_MODE" = true ]; then
+            DNS_SERVERS=(
+                "1.1.1.1:Cloudflare"
+                "8.8.8.8:Google"
+                "208.67.222.222:OpenDNS"
+            )
+        else
+            DNS_SERVERS=(
+                "1.1.1.1:Cloudflare"
+                "8.8.8.8:Google"
+                "208.67.222.222:OpenDNS"
+                "9.9.9.9:Quad9"
+                "64.6.64.6:Verisign"
+                "8.26.56.26:Comodo"
+                "156.154.70.1:Neustar"
+                "1.0.0.1:Cloudflare-2"
+                "185.228.168.9:CleanBrowsing"
+                "76.76.19.19:Alternate-DNS"
+            )
+        fi
+        
+        PROPAGATED_COUNT=0
+        TOTAL_COUNT=${#DNS_SERVERS[@]}
+        
+        for dns_entry in "${DNS_SERVERS[@]}"; do
+            dns_ip="${dns_entry%%:*}"
+            dns_name="${dns_entry#*:}"
+            
+            if check_dkim "$selector" "$dns_ip"; then
+                echo -e "  ${GREEN}✅ $dns_name ($dns_ip)${NC}"
+                ((PROPAGATED_COUNT++))
+            else
+                echo -e "  ${RED}✗ $dns_name ($dns_ip)${NC}"
+            fi
+        done
+        
+        # Calculate propagation percentage
+        PROPAGATION_PCT=$((PROPAGATED_COUNT * 100 / TOTAL_COUNT))
+        echo -e "  Propagation: ${PROPAGATION_PCT}% ($PROPAGATED_COUNT/$TOTAL_COUNT servers)"
+        
+        if [ "$PROPAGATION_PCT" -lt 50 ]; then
+            echo -e "  ${YELLOW}⚠️  Low propagation - record may be newly added${NC}"
+        fi
+        
+        # Display truncated record
+        if [ ! -z "$DKIM_RECORD" ]; then
+            DKIM_SHORT=$(echo "$DKIM_RECORD" | sed 's/\(.\{60\}\).*/\1.../' | head -1)
+            echo "  Record: $DKIM_SHORT"
+        fi
+        echo
+    done
+fi
+
+# Check for BIMI record
+echo -e "${BLUE}5. BIMI Record (optional):${NC}"
+echo "-------------------------"
+BIMI_RECORD=$(dig "default._bimi.$DOMAIN" TXT +short)
+if [ -z "$BIMI_RECORD" ]; then
+    echo "No BIMI record found (not required)"
+else
+    echo -e "${GREEN}✅ BIMI record found${NC}"
+    echo "$BIMI_RECORD"
+    
+    # Check if DMARC is strong enough for BIMI
+    if [ ! -z "$DMARC_RECORD" ]; then
+        if echo "$DMARC_RECORD" | grep -q "p=quarantine\|p=reject"; then
+            echo -e "${GREEN}✅ DMARC policy meets BIMI requirements${NC}"
+        else
+            echo -e "${YELLOW}⚠️  BIMI requires DMARC policy of quarantine or reject${NC}"
+        fi
+    fi
+fi
+echo
+
+# Check common blacklists
+echo -e "${BLUE}6. Blacklist Check:${NC}"
+echo "------------------"
+DOMAIN_IPS=$(dig +short "$DOMAIN" A)
+if [ ! -z "$DOMAIN_IPS" ]; then
+    for IP in $DOMAIN_IPS; do
+        echo -n "Checking IP $IP: "
+        
+        # Reverse the IP for blacklist check
+        REVERSED_IP=$(echo "$IP" | awk -F. '{print $4"."$3"."$2"."$1}')
+        
+        # Check multiple blacklists
+        BLACKLISTED=false
+        BLACKLIST_NAMES=""
+        
+        # Spamhaus
+        if dig +short "${REVERSED_IP}.zen.spamhaus.org" 2>/dev/null | grep -q "127\.0\.0\."; then
+            BLACKLIST_NAMES="${BLACKLIST_NAMES}Spamhaus "
+            BLACKLISTED=true
+        fi
+        
+        # Barracuda
+        if dig +short "${REVERSED_IP}.b.barracudacentral.org" 2>/dev/null | grep -q "127\.0\.0\."; then
+            BLACKLIST_NAMES="${BLACKLIST_NAMES}Barracuda "
+            BLACKLISTED=true
+        fi
+        
+        # SpamCop
+        if dig +short "${REVERSED_IP}.bl.spamcop.net" 2>/dev/null | grep -q "127\.0\.0\."; then
+            BLACKLIST_NAMES="${BLACKLIST_NAMES}SpamCop "
+            BLACKLISTED=true
+        fi
+        
+        if [ "$BLACKLISTED" = true ]; then
+            echo -e "${RED}❌ Listed in: $BLACKLIST_NAMES${NC}"
+        else
+            echo -e "${GREEN}✅ Clean${NC}"
+        fi
+    done
+    
+    if [ ! -z "$MX_RECORDS" ]; then
+        echo
+        echo -e "${CYAN}Note: Website IPs typically don't affect email if using external email providers${NC}"
+    fi
+else
+    echo "No A records found for domain"
+fi
+echo
+
+# Additional Security Checks
+if [ "$VERBOSE" = true ]; then
+    echo -e "${BLUE}7. Additional Security Checks:${NC}"
+    echo "-----------------------------"
+    
+    # Check for MTA-STS
+    MTA_STS=$(dig "_mta-sts.$DOMAIN" TXT +short)
+    if [ ! -z "$MTA_STS" ]; then
+        echo -e "${GREEN}✅ MTA-STS record found${NC}"
+        echo "   $MTA_STS"
+    else
+        echo "⚪ No MTA-STS record (optional security enhancement)"
+    fi
+    
+    # Check for TLSRPT
+    TLSRPT=$(dig "_smtp._tls.$DOMAIN" TXT +short)
+    if [ ! -z "$TLSRPT" ]; then
+        echo -e "${GREEN}✅ TLSRPT record found${NC}"
+        echo "   $TLSRPT"
+    else
+        echo "⚪ No TLSRPT record (optional TLS reporting)"
+    fi
+    
+    echo
+fi
+
+# Summary and recommendations
+echo -e "${BLUE}=== Summary & Recommendations ===${NC}"
+echo
+
+# Count total issues
+TOTAL_ISSUES=$((ISSUES_SPF + ISSUES_DKIM + ISSUES_DMARC + ISSUES_MX))
+
+# SPF Check
+if [ ! -z "$SPF_RECORDS" ] && [ "$SPF_COUNT" -eq 1 ] && [ "$ISSUES_SPF" -eq 0 ]; then
+    echo -e "${GREEN}✅ SPF: Properly configured${NC}"
+else
+    echo -e "${RED}❌ SPF: Issues detected${NC}"
+    if [ -z "$SPF_RECORDS" ]; then
+        echo "   → Add SPF record: v=spf1 include:_spf.${LIKELY_PROVIDER}.com ~all"
+    fi
+fi
+
+# DKIM Check
+if [ ${#FOUND_SELECTORS[@]} -gt 0 ]; then
+    echo -e "${GREEN}✅ DKIM: ${#FOUND_SELECTORS[@]} selector(s) found${NC}"
+else
+    echo -e "${RED}❌ DKIM: Not found${NC}"
+    case "$LIKELY_PROVIDER" in
+        "google")
+            echo "   → Go to Google Admin > Apps > Google Workspace > Gmail > Authenticate email"
+            ;;
+        "microsoft")
+            echo "   → Go to Microsoft 365 Admin Center > Settings > Domains > Select domain > DNS records"
+            ;;
+        *)
+            echo "   → Check with your email provider for DKIM setup instructions"
+            ;;
+    esac
+fi
+
+# DMARC Check
+if [ ! -z "$DMARC_RECORD" ]; then
+    if echo "$DMARC_RECORD" | grep -q "p=none"; then
+        echo -e "${YELLOW}⚠️  DMARC: Present but weak (p=none)${NC}"
+        echo "   → After testing, update to: p=quarantine"
+    else
+        echo -e "${GREEN}✅ DMARC: Configured with enforcement${NC}"
+    fi
+else
+    echo -e "${RED}❌ DMARC: Missing${NC}"
+    echo "   → Start with: v=DMARC1; p=none; rua=mailto:dmarc@$DOMAIN"
+fi
+
+# MX Check
+if [ "$ISSUES_MX" -eq 0 ] && [ ! -z "$MX_RECORDS" ]; then
+    echo -e "${GREEN}✅ MX: Mail servers configured${NC}"
+else
+    echo -e "${RED}❌ MX: Issues with mail configuration${NC}"
+fi
+
+echo
+echo -e "${BLUE}=== Recommended Testing Steps ===${NC}"
+echo
+
+# Provide specific test recommendations based on findings
+if [ "$TOTAL_ISSUES" -eq 0 ]; then
+    echo -e "${GREEN}Your email authentication looks good! Here's how to verify:${NC}"
+    echo
+    echo "1. ${MAGENTA}Quick Test:${NC}"
+    echo "   → Send an email to a Gmail account"
+    echo "   → Click ⋮ (three dots) → 'Show original'"
+    echo "   → Look for these authentication results:"
+    echo "     • SPF: PASS"
+    echo "     • DKIM: PASS"
+    echo "     • DMARC: PASS"
+    echo
+    echo "2. ${MAGENTA}Automated Test:${NC}"
+    echo "   → Send test email to: ${CYAN}check-auth@verifier.port25.com${NC}"
+    echo "   → You'll receive a detailed authentication report"
+    echo
+    echo "3. ${MAGENTA}Comprehensive Score:${NC}"
+    echo "   → Visit ${CYAN}https://www.mail-tester.com${NC}"
+    echo "   → Send email to the provided address"
+    echo "   → Get a spam score and detailed analysis"
+else
+    echo -e "${YELLOW}Found $TOTAL_ISSUES authentication issue(s). Fix these first:${NC}"
+    echo
+    
+    # Priority fixes
+    PRIORITY=1
+    if [ "$ISSUES_MX" -eq 1 ]; then
+        echo "$PRIORITY. ${RED}Fix MX records${NC} - Without these, you can't receive email"
+        ((PRIORITY++))
+    fi
+    if [ "$ISSUES_SPF" -eq 1 ]; then
+        echo "$PRIORITY. ${RED}Fix SPF record${NC} - Prevents email spoofing"
+        ((PRIORITY++))
+    fi
+    if [ "$ISSUES_DKIM" -eq 1 ]; then
+        echo "$PRIORITY. ${RED}Add DKIM signing${NC} - Proves emails are authentic"
+        ((PRIORITY++))
+    fi
+    if [ "$ISSUES_DMARC" -eq 1 ] && [ "$ISSUES_DKIM" -eq 0 ]; then
+        echo "$PRIORITY. ${YELLOW}Improve DMARC policy${NC} - Better protection against spoofing"
+        ((PRIORITY++))
+    fi
+    
+    echo
+    echo "After fixing these issues:"
+    echo "• Wait 30 minutes for DNS propagation"
+    echo "• Run this script again: ${CYAN}$0 $DOMAIN${NC}"
+    echo "• Then test with the methods above"
+fi
+
+# Provider-specific tips
+if [ ! -z "$LIKELY_PROVIDER" ] && [ "$LIKELY_PROVIDER" != "other" ]; then
+    echo
+    PROVIDER_NAME=$(echo "$LIKELY_PROVIDER" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
+    echo -e "${BLUE}=== $PROVIDER_NAME Specific Tips ===${NC}"
+    
+    case "$LIKELY_PROVIDER" in
+        "google")
+            echo "• Check authentication status: ${CYAN}admin.google.com${NC} > Apps > Gmail > Authenticate email"
+            echo "• Enable 2-step verification for better security"
+            echo "• Consider using Google Postmaster Tools for delivery insights"
+            ;;
+        "microsoft")
+            echo "• Check settings: ${CYAN}admin.microsoft.com${NC} > Settings > Domains"
+            echo "• Use Message Trace to debug delivery issues"
+            echo "• Enable Advanced Threat Protection for better security"
+            ;;
+        "zoho")
+            echo "• Check settings: ${CYAN}mailadmin.zoho.com${NC} > Email Authentication"
+            echo "• Enable two-factor authentication"
+            echo "• Use Email Tracer for delivery debugging"
+            ;;
+    esac
+fi
+
+echo
+echo -e "${CYAN}To check a different domain, run:${NC}"
+echo "  $0 [-q] [-v] domain.com"
+echo "  $0 [-q] [-v] user@domain.com"

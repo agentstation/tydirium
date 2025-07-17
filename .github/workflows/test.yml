@@ -1,0 +1,56 @@
+name: Test
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y dnsutils
+    
+    - name: Verify dig is available (macOS)
+      if: matrix.os == 'macos-latest'
+      run: which dig
+    
+    - name: Make script executable
+      run: chmod +x tydirium
+    
+    - name: Test help flag
+      run: ./tydirium -h
+    
+    - name: Test quick mode on known domains
+      run: |
+        ./tydirium -q gmail.com
+        ./tydirium -q github.com
+    
+    - name: Test email address parsing
+      run: ./tydirium -q test@example.com
+    
+    - name: Test non-existent domain
+      run: ./tydirium -q this-domain-definitely-does-not-exist-12345.com || true
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Run ShellCheck
+      uses: ludeeus/action-shellcheck@master
+      with:
+        scandir: '.'
+        ignore_paths: 'docs'
+        severity: warning
