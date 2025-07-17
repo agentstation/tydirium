@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Run tests
+      run: |
+        chmod +x tydirium
+        ./tydirium -h
+        ./tydirium -q google.com
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    
+    - name: Get version
+      id: version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        if [ -z "$PREVIOUS_TAG" ]; then
+          CHANGELOG=$(git log --pretty=format:"- %s" --no-merges)
+        else
+          CHANGELOG=$(git log --pretty=format:"- %s" --no-merges ${PREVIOUS_TAG}..HEAD)
+        fi
+        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.VERSION }}
+        name: ${{ steps.version.outputs.VERSION }}
+        body: |
+          ## What's Changed
+          
+          ${{ steps.changelog.outputs.CHANGELOG }}
+          
+          ## Installation
+          
+          ### Via Homebrew
+          ```bash
+          brew install agentstation/tap/tydirium
+          ```
+          
+          ### Via curl
+          ```bash
+          curl -sSL https://raw.githubusercontent.com/agentstation/tydirium/master/install.sh | bash
+          ```
+          
+          ---
+          
+          "It's an older email, sir, but it checks out." 🌟
+        draft: false
+        prerelease: false
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout homebrew-tap
+      uses: actions/checkout@v3
+      with:
+        repository: agentstation/homebrew-tap
+        token: ${{ secrets.GITHUB_TOKEN }}
+        path: homebrew-tap
+    
+    - name: Get version and SHA
+      id: info
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        
+        # Download and calculate SHA256
+        curl -sL "https://github.com/agentstation/tydirium/archive/refs/tags/${VERSION}.tar.gz" -o tydirium.tar.gz
+        SHA256=$(shasum -a 256 tydirium.tar.gz | cut -d' ' -f1)
+        echo "SHA256=$SHA256" >> $GITHUB_OUTPUT
+    
+    - name: Update Formula
+      run: |
+        cd homebrew-tap
+        sed -i "s|url \".*\"|url \"https://github.com/agentstation/tydirium/archive/refs/tags/${{ steps.info.outputs.VERSION }}.tar.gz\"|" Formula/tydirium.rb
+        sed -i "s|sha256 \".*\"|sha256 \"${{ steps.info.outputs.SHA256 }}\"|" Formula/tydirium.rb
+    
+    - name: Commit and Push
+      run: |
+        cd homebrew-tap
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git add Formula/tydirium.rb
+        git commit -m "Update tydirium to ${{ steps.info.outputs.VERSION }}" || echo "No changes to commit"
+        git push || echo "No changes to push"

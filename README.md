@@ -43,7 +43,14 @@ tydirium -v example.com
 curl -sSL https://raw.githubusercontent.com/agentstation/tydirium/master/install.sh | bash
 ```
 
-### Via Homebrew (Coming Soon)
+### Via Homebrew
+
+```bash
+brew tap agentstation/tap
+brew install tydirium
+```
+
+Or in one command:
 
 ```bash
 brew install agentstation/tap/tydirium
