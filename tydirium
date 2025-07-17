@@ -195,11 +195,11 @@ else
         fi
         
         # Check mechanisms
-        if echo "$SPF_RECORDS" | grep -q "~all\|?all\|-all\|+all"; then
+        if echo "$SPF_RECORDS" | grep -E -q "~all|\\?all|-all|\\+all"; then
             if echo "$SPF_RECORDS" | grep -q "+all"; then
                 echo -e "${RED}❌ SPF uses +all (allows anyone to send)${NC}"
                 ISSUES_SPF=1
-            elif echo "$SPF_RECORDS" | grep -q "-all"; then
+            elif echo "$SPF_RECORDS" | grep -q -- "-all"; then
                 echo -e "${GREEN}✅ SPF uses -all (strict policy)${NC}"
             elif echo "$SPF_RECORDS" | grep -q "~all"; then
                 echo -e "${YELLOW}⚠️  SPF uses ~all (soft fail)${NC}"
@@ -213,8 +213,11 @@ else
         
         # Check for common includes
         if [ "$VERBOSE" = true ]; then
-            echo "   SPF includes:"
-            echo "$SPF_RECORDS" | sed -n 's/.*\(include:[^ ]*\).*/   - \1/p' | sed 's/include://'
+            INCLUDES=$(echo "$SPF_RECORDS" | sed -n 's/.*\(include:[^ ]*\).*/\1/p')
+            if [ ! -z "$INCLUDES" ]; then
+                echo "   SPF includes:"
+                echo "$INCLUDES" | sed 's/include:/   - /'
+            fi
         fi
         
         # Check SPF record length
